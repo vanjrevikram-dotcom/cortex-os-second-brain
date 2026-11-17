@@ -36,6 +36,51 @@ const NAV_ITEMS = [
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  if (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_LOCAL_AUTH_BYPASS === "true"
+  ) {
+    return <LocalAppShell>{children}</LocalAppShell>;
+  }
+  return <ClerkAppShell>{children}</ClerkAppShell>;
+}
+
+function LocalAppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background text-foreground font-mono">
+      <aside className="glass-card border-r border-white/10 p-4 md:w-64">
+        <Link href="/dashboard" className="block p-3 font-bold neon-text">
+          CORTEXOS <span className="text-primary">LOCAL</span>
+        </Link>
+        <nav className="space-y-1">
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            >
+              <item.icon size={18} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+          <Link
+            href="/settings"
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground"
+          >
+            <Settings size={18} />
+            <span>Settings</span>
+          </Link>
+        </nav>
+        <p className="mt-6 px-3 text-xs text-primary">Local auth bypass enabled</p>
+      </aside>
+      <main className="flex-1 min-w-0 overflow-y-auto p-4 md:p-8">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function ClerkAppShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();

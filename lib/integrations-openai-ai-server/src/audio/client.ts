@@ -6,21 +6,9 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { join } from "path";
 
-if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
-  throw new Error(
-    "AI_INTEGRATIONS_OPENAI_BASE_URL must be set. Did you forget to provision the OpenAI AI integration?",
-  );
-}
-
-if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-  throw new Error(
-    "AI_INTEGRATIONS_OPENAI_API_KEY must be set. Did you forget to provision the OpenAI AI integration?",
-  );
-}
-
 export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "ollama",
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || "http://localhost:11434/v1",
 });
 
 export type AudioFormat = "wav" | "mp3" | "webm" | "mp4" | "ogg" | "unknown";
@@ -108,7 +96,8 @@ export async function ensureCompatibleFormat(
   return { buffer: wavBuffer, format: "wav" };
 }
 
-/** Voice Chat: audio-in, audio-out using gpt-audio. */
+// NOTE: Ollama chat models do not support realtime audio-in/audio-out. This path will fail unless AI_AUDIO_MODEL points to a compatible provider.
+/** Voice Chat: audio-in, audio-out using the configured audio model. */
 export async function voiceChat(
   audioBuffer: Buffer,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
@@ -117,7 +106,7 @@ export async function voiceChat(
 ): Promise<{ transcript: string; audioResponse: Buffer }> {
   const audioBase64 = audioBuffer.toString("base64");
   const response = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: process.env.AI_AUDIO_MODEL || "qwen3.5:4b",
     modalities: ["text", "audio"],
     audio: { voice, format: outputFormat },
     messages: [{
@@ -126,6 +115,8 @@ export async function voiceChat(
         { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
       ],
     }],
+    // @ts-expect-error Ollama-specific request field, not part of the OpenAI SDK types.
+    extra_body: { think: false },
   });
   const message = response.choices[0]?.message as any;
   const transcript = message?.audio?.transcript || message?.content || "";
@@ -143,8 +134,9 @@ export async function voiceChatStream(
   inputFormat: "wav" | "mp3" = "wav"
 ): Promise<AsyncIterable<{ type: "transcript" | "audio"; data: string }>> {
   const audioBase64 = audioBuffer.toString("base64");
+  // @ts-expect-error Ollama-specific request field; the SDK's stream overload does not accept it.
   const stream = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: process.env.AI_AUDIO_MODEL || "qwen3.5:4b",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
     messages: [{
@@ -154,6 +146,7 @@ export async function voiceChatStream(
       ],
     }],
     stream: true,
+    extra_body: { think: false },
   });
 
   return (async function* () {
@@ -170,20 +163,22 @@ export async function voiceChatStream(
   })();
 }
 
-/** Text-to-Speech using gpt-audio. */
+/** Text-to-Speech using the configured audio model. */
 export async function textToSpeech(
   text: string,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
   format: "wav" | "mp3" | "flac" | "opus" | "pcm16" = "wav"
 ): Promise<Buffer> {
   const response = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: process.env.AI_AUDIO_MODEL || "qwen3.5:4b",
     modalities: ["text", "audio"],
     audio: { voice, format },
     messages: [
       { role: "system", content: "You are an assistant that performs text-to-speech." },
       { role: "user", content: `Repeat the following text verbatim: ${text}` },
     ],
+    // @ts-expect-error Ollama-specific request field, not part of the OpenAI SDK types.
+    extra_body: { think: false },
   });
   const audioData = (response.choices[0]?.message as any)?.audio?.data ?? "";
   return Buffer.from(audioData, "base64");
@@ -194,8 +189,9 @@ export async function textToSpeechStream(
   text: string,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy"
 ): Promise<AsyncIterable<string>> {
+  // @ts-expect-error Ollama-specific request field; the SDK's stream overload does not accept it.
   const stream = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: process.env.AI_AUDIO_MODEL || "qwen3.5:4b",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
     messages: [
@@ -203,6 +199,7 @@ export async function textToSpeechStream(
       { role: "user", content: `Repeat the following text verbatim: ${text}` },
     ],
     stream: true,
+    extra_body: { think: false },
   });
 
   return (async function* () {
@@ -216,7 +213,7 @@ export async function textToSpeechStream(
   })();
 }
 
-/** Speech-to-Text using gpt-4o-mini-transcribe. */
+/** Speech-to-Text using the configured STT model. */
 export async function speechToText(
   audioBuffer: Buffer,
   format: "wav" | "mp3" | "webm" = "wav"
@@ -224,7 +221,7 @@ export async function speechToText(
   const file = await toFile(audioBuffer, `audio.${format}`);
   const response = await openai.audio.transcriptions.create({
     file,
-    model: "gpt-4o-mini-transcribe",
+    model: process.env.AI_STT_MODEL || "qwen3.5:4b",
   });
   return response.text;
 }
@@ -237,7 +234,7 @@ export async function speechToTextStream(
   const file = await toFile(audioBuffer, `audio.${format}`);
   const stream = await openai.audio.transcriptions.create({
     file,
-    model: "gpt-4o-mini-transcribe",
+    model: process.env.AI_STT_MODEL || "qwen3.5:4b",
     stream: true,
   });
 

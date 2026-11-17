@@ -1,6 +1,6 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
 
-const MODEL = "qwen3:8b";
+const MODEL = process.env.AI_MODEL || "qwen3.5:4b";
 
 export async function aiText(
   systemPrompt: string,
@@ -9,6 +9,9 @@ export async function aiText(
   const completion = await openai.chat.completions.create({
     model: MODEL,
     max_completion_tokens: 8192,
+    reasoning_effort: "none",
+    // @ts-expect-error Ollama-specific request body field.
+    extra_body: { think: false },
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -25,6 +28,9 @@ export async function aiJSON<T>(
     model: MODEL,
     max_completion_tokens: 8192,
     response_format: { type: "json_object" },
+    reasoning_effort: "none",
+    // @ts-expect-error Ollama-specific request body field.
+    extra_body: { think: false },
     messages: [
       {
         role: "system",

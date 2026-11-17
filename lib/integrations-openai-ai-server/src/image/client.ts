@@ -2,29 +2,24 @@ import fs from "node:fs";
 import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 
-if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
-  throw new Error(
-    "AI_INTEGRATIONS_OPENAI_BASE_URL must be set. Did you forget to provision the OpenAI AI integration?",
-  );
-}
-
-if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
-  throw new Error(
-    "AI_INTEGRATIONS_OPENAI_API_KEY must be set. Did you forget to provision the OpenAI AI integration?",
-  );
-}
-
 export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "ollama",
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || "http://localhost:11434/v1",
 });
 
 export async function generateImageBuffer(
   prompt: string,
   size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
 ): Promise<Buffer> {
+  if (!process.env.AI_IMAGE_MODEL) {
+    throw new Error(
+      "Image generation requires AI_IMAGE_MODEL to be set to a real " +
+      "image-capable provider. Ollama qwen3.5:4b cannot generate images."
+    );
+  }
+
   const response = await openai.images.generate({
-    model: "gpt-image-1",
+    model: process.env.AI_IMAGE_MODEL,
     prompt,
     size,
   });
@@ -37,6 +32,13 @@ export async function editImages(
   prompt: string,
   outputPath?: string
 ): Promise<Buffer> {
+  if (!process.env.AI_IMAGE_MODEL) {
+    throw new Error(
+      "Image generation requires AI_IMAGE_MODEL to be set to a real " +
+      "image-capable provider. Ollama qwen3.5:4b cannot generate images."
+    );
+  }
+
   const images = await Promise.all(
     imageFiles.map((file) =>
       toFile(fs.createReadStream(file), file, {
@@ -46,7 +48,7 @@ export async function editImages(
   );
 
   const response = await openai.images.edit({
-    model: "gpt-image-1",
+    model: process.env.AI_IMAGE_MODEL,
     image: images,
     prompt,
   });

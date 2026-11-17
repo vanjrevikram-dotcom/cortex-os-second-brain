@@ -27,6 +27,9 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
+const localAuthBypass =
+  import.meta.env.DEV && import.meta.env.VITE_LOCAL_AUTH_BYPASS === "true";
+
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function stripBase(path: string): string {
@@ -35,7 +38,7 @@ function stripBase(path: string): string {
     : path;
 }
 
-if (!clerkPubKey) {
+if (!clerkPubKey && !localAuthBypass) {
   throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
 }
 
@@ -107,6 +110,10 @@ function SignUpPage() {
 }
 
 function HomeRedirect() {
+  if (localAuthBypass) {
+    return <Redirect to="/dashboard" />;
+  }
+
   return (
     <>
       <Show when="signed-in">
@@ -120,6 +127,16 @@ function HomeRedirect() {
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  if (localAuthBypass) {
+    const LocalComponent =
+      Component === SettingsPage ? LocalSettingsPage : Component;
+    return (
+      <AppShell>
+        <LocalComponent />
+      </AppShell>
+    );
+  }
+
   return (
     <>
       <Show when="signed-in">
@@ -132,6 +149,21 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
       </Show>
     </>
   );
+}
+
+function LocalSettingsPage() {
+  return (
+    <div className="space-y-4">
+      <h1 className="text-3xl font-bold tracking-tight neon-text">Settings</h1>
+      <p className="text-muted-foreground">
+        Profile and account settings require a Clerk development instance.
+      </p>
+    </div>
+  );
+}
+
+function LocalAuthRedirect() {
+  return <Redirect to="/dashboard" />;
 }
 
 function ClerkQueryClientCacheInvalidator() {
@@ -154,6 +186,43 @@ function ClerkQueryClientCacheInvalidator() {
   }, [addListener, queryClient]);
 
   return null;
+}
+
+function ApplicationRoutes() {
+  return (
+    <>
+      <Switch>
+        <Route path="/" component={HomeRedirect} />
+        <Route
+          path="/sign-in/*?"
+          component={localAuthBypass ? LocalAuthRedirect : SignInPage}
+        />
+        <Route
+          path="/sign-up/*?"
+          component={localAuthBypass ? LocalAuthRedirect : SignUpPage}
+        />
+
+        <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
+        <Route path="/notes"><ProtectedRoute component={NotesPage} /></Route>
+        <Route path="/documents"><ProtectedRoute component={DocumentsPage} /></Route>
+        <Route path="/tasks"><ProtectedRoute component={TasksPage} /></Route>
+        <Route path="/projects"><ProtectedRoute component={ProjectsPage} /></Route>
+        <Route path="/chat"><ProtectedRoute component={ChatPage} /></Route>
+        <Route path="/decisions"><ProtectedRoute component={DecisionsPage} /></Route>
+        <Route path="/contradictions"><ProtectedRoute component={ContradictionsPage} /></Route>
+        <Route path="/knowledge-graph"><ProtectedRoute component={KnowledgeGraphPage} /></Route>
+        <Route path="/research"><ProtectedRoute component={ResearchPage} /></Route>
+        <Route path="/reasoning"><ProtectedRoute component={ReasoningPage} /></Route>
+        <Route path="/memory"><ProtectedRoute component={MemoryPage} /></Route>
+        <Route path="/settings/*?"><ProtectedRoute component={SettingsPage} /></Route>
+
+        <Route path="/:rest*">
+          <Redirect to="/" />
+        </Route>
+      </Switch>
+      <Toaster />
+    </>
+  );
 }
 
 function ClerkProviderWithRoutes() {
@@ -186,40 +255,27 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ClerkQueryClientCacheInvalidator />
-          <Switch>
-            <Route path="/" component={HomeRedirect} />
-            <Route path="/sign-in/*?" component={SignInPage} />
-            <Route path="/sign-up/*?" component={SignUpPage} />
-            
-            <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
-            <Route path="/notes"><ProtectedRoute component={NotesPage} /></Route>
-            <Route path="/documents"><ProtectedRoute component={DocumentsPage} /></Route>
-            <Route path="/tasks"><ProtectedRoute component={TasksPage} /></Route>
-            <Route path="/projects"><ProtectedRoute component={ProjectsPage} /></Route>
-            <Route path="/chat"><ProtectedRoute component={ChatPage} /></Route>
-            <Route path="/decisions"><ProtectedRoute component={DecisionsPage} /></Route>
-            <Route path="/contradictions"><ProtectedRoute component={ContradictionsPage} /></Route>
-            <Route path="/knowledge-graph"><ProtectedRoute component={KnowledgeGraphPage} /></Route>
-            <Route path="/research"><ProtectedRoute component={ResearchPage} /></Route>
-            <Route path="/reasoning"><ProtectedRoute component={ReasoningPage} /></Route>
-            <Route path="/memory"><ProtectedRoute component={MemoryPage} /></Route>
-            <Route path="/settings/*?"><ProtectedRoute component={SettingsPage} /></Route>
-
-            <Route path="/:rest*">
-              <Redirect to="/" />
-            </Route>
-          </Switch>
-          <Toaster />
+          <ApplicationRoutes />
         </TooltipProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );
 }
 
+function LocalProviderWithRoutes() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <ApplicationRoutes />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
 function App() {
   return (
     <WouterRouter base={basePath}>
-      <ClerkProviderWithRoutes />
+      {localAuthBypass ? <LocalProviderWithRoutes /> : <ClerkProviderWithRoutes />}
     </WouterRouter>
   );
 }

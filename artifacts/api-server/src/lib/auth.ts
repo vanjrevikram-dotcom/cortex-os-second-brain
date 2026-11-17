@@ -15,6 +15,15 @@ export function requireAuth(
   res: Response,
   next: NextFunction,
 ): void {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.LOCAL_AUTH_BYPASS === "true"
+  ) {
+    req.userId = "local-dev";
+    next();
+    return;
+  }
+
   const auth = getAuth(req);
   const userId =
     (auth?.sessionClaims?.userId as string | undefined) || auth?.userId;

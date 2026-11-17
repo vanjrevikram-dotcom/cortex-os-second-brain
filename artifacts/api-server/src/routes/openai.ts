@@ -177,10 +177,14 @@ router.post(
 
     let assistantText = "";
     try {
+      // @ts-expect-error Ollama streaming request extension is not in the SDK types.
       const stream = await openai.chat.completions.create({
-        model: "qwen3:8b",
+        model: process.env.AI_MODEL || "qwen3.5:4b",
         max_completion_tokens: 1024,
         stream: true,
+        stream_options: { include_usage: true },
+        reasoning_effort: "none",
+        extra_body: { think: false },
         messages: [
           { role: "system", content: systemPrompt },
           ...history.map((m) => ({
@@ -195,6 +199,11 @@ router.post(
         if (delta) {
           assistantText += delta;
           res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+        }
+        if (chunk.usage) {
+          res.write(
+            `data: ${JSON.stringify({ completion_tokens: chunk.usage.completion_tokens })}\n\n`,
+          );
         }
       }
     } catch (err) {

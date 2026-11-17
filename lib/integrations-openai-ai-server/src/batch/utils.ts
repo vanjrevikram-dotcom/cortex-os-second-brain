@@ -19,6 +19,8 @@ import pRetry, { AbortError } from "p-retry";
  *       model: "gpt-5.4",
  *       messages: [{ role: "user", content: `Categorize: ${artwork.name}` }],
  *       response_format: { type: "json_object" },
+ *       // @ts-expect-error Ollama-specific request field, not part of the OpenAI SDK types.
+ *       extra_body: { think: false },
  *     });
  *     return JSON.parse(response.choices[0]?.message?.content || "{}");
  *   },

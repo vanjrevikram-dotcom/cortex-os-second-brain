@@ -1,11 +1,14 @@
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
+const repoRoot = path.resolve(import.meta.dirname, "../..");
+loadDotenv({ path: path.join(repoRoot, ".env") });
+
+const rawPort = process.env.VITE_PORT || process.env.PORT;
 
 if (!rawPort) {
   throw new Error(
@@ -55,6 +58,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname),
+  envDir: repoRoot,
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
